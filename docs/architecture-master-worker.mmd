@@ -1,0 +1,26 @@
+graph TB
+    Master[Master Process<br/>- Reads configuration<br/>- Manages workers<br/>- Handles signals]
+    
+    Worker1[Worker Process 1<br/>Handles connections]
+    Worker2[Worker Process 2<br/>Handles connections]
+    Worker3[Worker Process 3<br/>Handles connections]
+    WorkerN[Worker Process N<br/>Handles connections]
+    
+    Master --> Worker1
+    Master --> Worker2
+    Master --> Worker3
+    Master --> WorkerN
+    
+    Client1[Client 1] --> Worker1
+    Client2[Client 2] --> Worker1
+    Client3[Client 3] --> Worker2
+    Client4[Client 4] --> Worker2
+    Client5[Client 5] --> Worker3
+    ClientN[Client N] --> WorkerN
+    
+    style Master fill:#ff6b6b
+    style Worker1 fill:#4ecdc4
+    style Worker2 fill:#4ecdc4
+    style Worker3 fill:#4ecdc4
+    style WorkerN fill:#4ecdc4
+

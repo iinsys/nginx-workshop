@@ -1,0 +1,23 @@
+graph LR
+    subgraph "Traditional Model (Apache-like)"
+        Conn1[Connection 1] --> Proc1[Process/Thread 1]
+        Conn2[Connection 2] --> Proc2[Process/Thread 2]
+        Conn3[Connection 3] --> Proc3[Process/Thread 3]
+        ConnN[Connection N] --> ProcN[Process/Thread N]
+    end
+    
+    subgraph "nginx Event Model"
+        Worker[Worker Process]
+        EventLoop[Event Loop]
+        
+        ConnA[Connection 1<br/>non-blocking] --> EventLoop
+        ConnB[Connection 2<br/>non-blocking] --> EventLoop
+        ConnC[Connection 3<br/>non-blocking] --> EventLoop
+        ConnD[Connection ...<br/>thousands] --> EventLoop
+        
+        EventLoop --> Worker
+    end
+    
+    style Worker fill:#4ecdc4
+    style EventLoop fill:#95e1d3
+

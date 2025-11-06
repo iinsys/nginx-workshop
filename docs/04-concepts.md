@@ -17,11 +17,7 @@ A reverse proxy sits between clients and backend servers, forwarding client requ
 
 ### How It Works
 
-```
-Client → nginx (Reverse Proxy) → Backend Server
-         ↑                          ↓
-         ←──────────────────────────
-```
+![Reverse Proxy Flow](./concepts-reverse-proxy.mmd)
 
 nginx receives request, forwards to backend, receives response, sends to client.
 
@@ -37,37 +33,31 @@ Distributing incoming requests across multiple backend servers to:
 
 ### Load Balancing Methods
 
+![Load Balancing Methods](./concepts-load-balancing.mmd)
+
 #### 1. Round Robin (Default)
 Requests distributed evenly in order:
-```
-Request 1 → Server 1
-Request 2 → Server 2
-Request 3 → Server 3
-Request 4 → Server 1 (cycle repeats)
-```
+- Request 1 → Server 1
+- Request 2 → Server 2
+- Request 3 → Server 3
+- Request 4 → Server 1 (cycle repeats)
 
 #### 2. Least Connections
 Route to server with fewest active connections:
-```
-Server 1: 5 connections
-Server 2: 3 connections ← Next request goes here
-Server 3: 7 connections
-```
+- Server 1: 5 connections
+- Server 2: 3 connections ← Next request goes here
+- Server 3: 7 connections
 
 #### 3. IP Hash
 Same client IP always goes to same server:
-```
-Client A (IP: 1.2.3.4) → Always Server 1
-Client B (IP: 5.6.7.8) → Always Server 2
-```
+- Client A (IP: 1.2.3.4) → Always Server 1
+- Client B (IP: 5.6.7.8) → Always Server 2
 
 #### 4. Weighted Round Robin
 Servers receive requests proportional to weight:
-```
-Server 1: weight=3 (handles 50% of requests)
-Server 2: weight=2 (handles 33% of requests)
-Server 3: weight=1 (handles 17% of requests)
-```
+- Server 1: weight=3 (handles 50% of requests)
+- Server 2: weight=2 (handles 33% of requests)
+- Server 3: weight=1 (handles 17% of requests)
 
 ### Health Checks
 
@@ -84,9 +74,7 @@ Processing SSL/TLS encryption/decryption at the proxy instead of backend servers
 
 ### How It Works
 
-```
-Client (HTTPS) → nginx (decrypts) → Backend (HTTP) → nginx (encrypts) → Client
-```
+![SSL Termination Flow](./concepts-ssl-termination.mmd)
 
 ### Benefits
 
@@ -116,10 +104,10 @@ Storing responses temporarily to serve future identical requests faster without 
 
 ### How nginx Caching Works
 
-```
-Request 1: Client → nginx → Backend → Response (stored in cache)
-Request 2: Client → nginx → Cache (served directly, no backend call)
-```
+![Caching Flow](./concepts-caching.mmd)
+
+- Request 1: Client → nginx → Backend → Response (stored in cache)
+- Request 2: Client → nginx → Cache (served directly, no backend call)
 
 ### Cache Zones
 
@@ -146,6 +134,8 @@ Determine what makes responses unique:
 ## Static File Serving
 
 ### What is Static File Serving?
+
+![Static File Serving](./concepts-static-serving.mmd)
 
 Directly serving files (HTML, CSS, JS, images) without processing.
 

@@ -1,0 +1,30 @@
+graph TB
+    Client1[Client 1<br/>Request 1]
+    Client2[Client 2<br/>Request 2<br/>Same URL]
+    
+    Nginx[nginx Server]
+    
+    subgraph "Cache Zone"
+        Cache[Cache Storage<br/>Memory + Disk]
+        Check{Cache Hit?}
+    end
+    
+    Backend[Backend Server]
+    
+    Client1 -->|1. Request| Nginx
+    Nginx -->|2. Check Cache| Check
+    Check -->|MISS| Backend
+    Backend -->|3. Response| Nginx
+    Nginx -->|4. Store in Cache| Cache
+    Nginx -->|5. Response| Client1
+    
+    Client2 -->|1. Request| Nginx
+    Nginx -->|2. Check Cache| Check
+    Check -->|HIT| Cache
+    Cache -->|3. Serve from Cache| Nginx
+    Nginx -->|4. Response<br/>Fast!| Client2
+    
+    style Nginx fill:#4ecdc4
+    style Cache fill:#ffd93d
+    style Check fill:#95e1d3
+

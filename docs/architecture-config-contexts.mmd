@@ -1,0 +1,34 @@
+graph TD
+    Main[Main Context<br/>Top-level configuration]
+    
+    Events[Events Context<br/>Event model config]
+    HTTP[HTTP Context<br/>HTTP server config]
+    
+    Upstream[Upstream Context<br/>Backend server groups]
+    
+    Server1[Server Block 1<br/>Virtual host 1]
+    Server2[Server Block 2<br/>Virtual host 2]
+    
+    Loc1[Location /<br/>URL matching]
+    Loc2[Location /api/<br/>URL matching]
+    Loc3[Location /static/<br/>URL matching]
+    
+    Main --> Events
+    Main --> HTTP
+    
+    HTTP --> Upstream
+    HTTP --> Server1
+    HTTP --> Server2
+    
+    Server1 --> Loc1
+    Server1 --> Loc2
+    Server2 --> Loc3
+    
+    style Main fill:#ff6b6b
+    style HTTP fill:#4ecdc4
+    style Server1 fill:#ffd93d
+    style Server2 fill:#ffd93d
+    style Loc1 fill:#95e1d3
+    style Loc2 fill:#95e1d3
+    style Loc3 fill:#95e1d3
+

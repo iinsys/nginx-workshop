@@ -1,0 +1,25 @@
+graph TB
+    Client[Client Browser] -->|1. HTTP Request| Nginx[nginx Worker Process]
+    
+    Nginx -->|2. Read Headers| Phase1[POST_READ Phase]
+    Phase1 -->|3. Server Rewrite| Phase2[SERVER_REWRITE Phase]
+    Phase2 -->|4. Find Location| Phase3[FIND_CONFIG Phase]
+    Phase3 -->|5. Location Rewrite| Phase4[REWRITE Phase]
+    Phase4 -->|6. Access Control| Phase5[ACCESS Phase]
+    Phase5 -->|7. Generate Content| Phase6[CONTENT Phase]
+    
+    Phase6 -->|8a. Serve Static File| Static[Static File Server]
+    Phase6 -->|8b. Proxy to Backend| Proxy[Backend Server]
+    Phase6 -->|8c. Load Balance| Upstream[Upstream Servers]
+    
+    Static -->|9. Response| Nginx
+    Proxy -->|9. Response| Nginx
+    Upstream -->|9. Response| Nginx
+    
+    Nginx -->|10. Log Request| Phase7[LOG Phase]
+    Phase7 -->|11. Send Response| Client
+    
+    style Nginx fill:#4ecdc4
+    style Phase6 fill:#ffd93d
+    style Client fill:#95e1d3
+

@@ -1,0 +1,26 @@
+graph LR
+    Client[Client Browser]
+    
+    subgraph "nginx Reverse Proxy"
+        Nginx[nginx Server]
+        Process[Process Request<br/>Add Headers<br/>Modify if needed]
+    end
+    
+    subgraph "Backend Servers"
+        Backend1[Backend Server 1]
+        Backend2[Backend Server 2]
+    end
+    
+    Client -->|1. Request| Nginx
+    Nginx -->|2. Process| Process
+    Process -->|3. Forward| Backend1
+    Process -->|3. Forward| Backend2
+    Backend1 -->|4. Response| Process
+    Backend2 -->|4. Response| Process
+    Process -->|5. Add Headers| Nginx
+    Nginx -->|6. Response| Client
+    
+    style Nginx fill:#4ecdc4
+    style Process fill:#ffd93d
+    style Client fill:#95e1d3
+

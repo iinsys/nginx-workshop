@@ -4,13 +4,7 @@
 
 nginx uses a master-worker process architecture:
 
-```
-Master Process
-├── Worker Process 1
-├── Worker Process 2
-├── Worker Process 3
-└── Worker Process N
-```
+![Master-Worker Process Model](./architecture-master-worker.mmd)
 
 ### Master Process
 
@@ -51,14 +45,7 @@ Problems:
 
 ### nginx Event Model
 
-```
-Worker Process
-├── Event Loop
-│   ├── Connection 1 (non-blocking)
-│   ├── Connection 2 (non-blocking)
-│   ├── Connection 3 (non-blocking)
-│   └── ... (thousands)
-```
+![Event-Driven Architecture](./architecture-event-driven.mmd)
 
 Benefits:
 - Single worker handles many connections
@@ -70,6 +57,9 @@ Benefits:
 
 ### Request Lifecycle
 
+![Request Processing Flow](./architecture-request-flow.mmd)
+
+The request goes through these steps:
 1. **Client connects** to nginx
 2. **Worker accepts** connection (using event mechanism)
 3. **Reads request** headers
@@ -101,7 +91,10 @@ nginx processes requests in phases:
 
 nginx configuration is organized in hierarchical contexts:
 
-```
+![Configuration Context Hierarchy](./architecture-config-contexts.mmd)
+
+Example structure:
+```nginx
 http {
     # HTTP-level directives
     

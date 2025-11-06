@@ -1,0 +1,36 @@
+graph TB
+    Client1[Client 1]
+    Client2[Client 2]
+    Client3[Client 3]
+    ClientN[Client N]
+    
+    Nginx[nginx Load Balancer]
+    
+    subgraph "Backend Servers"
+        Server1[Server 1<br/>Weight: 3]
+        Server2[Server 2<br/>Weight: 2]
+        Server3[Server 3<br/>Weight: 1]
+    end
+    
+    Client1 -->|Request 1| Nginx
+    Client2 -->|Request 2| Nginx
+    Client3 -->|Request 3| Nginx
+    ClientN -->|Request N| Nginx
+    
+    Nginx -->|Round Robin| Server1
+    Nginx -->|Round Robin| Server2
+    Nginx -->|Round Robin| Server3
+    
+    Nginx -->|Least Connections| Server1
+    Nginx -->|Least Connections| Server2
+    Nginx -->|Least Connections| Server3
+    
+    Nginx -->|IP Hash| Server1
+    Nginx -->|IP Hash| Server2
+    Nginx -->|IP Hash| Server3
+    
+    style Nginx fill:#4ecdc4
+    style Server1 fill:#ffd93d
+    style Server2 fill:#ffd93d
+    style Server3 fill:#ffd93d
+
