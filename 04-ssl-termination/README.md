@@ -12,9 +12,9 @@ This section demonstrates how to configure SSL/TLS termination in nginx to enabl
 
 ## Prerequisites
 
+- Python 3.x and pip installed (see Topic 2 for installation)
 - OpenSSL installed (usually pre-installed on Linux/macOS)
 - Understanding of reverse proxy (Topic 2)
-- Flask application from previous topics
 
 ## Installation
 
@@ -25,19 +25,64 @@ sudo apt update
 sudo apt install nginx -y
 ```
 
-### Verify OpenSSL
+### Install OpenSSL
+
+OpenSSL is usually pre-installed on Linux/macOS, but if needed:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install openssl -y
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install openssl -y
+```
+
+**macOS:**
+```bash
+brew install openssl
+```
+
+### Verify OpenSSL Installation
 ```bash
 openssl version
 ```
+
+### Install Python Dependencies
+
+Navigate to the workshop directory and install dependencies:
+```bash
+cd 04-ssl-termination
+pip3 install -r requirements.txt
+```
+
+## What is OpenSSL?
+
+**OpenSSL** is an open-source toolkit that provides cryptographic functions for secure communication over networks. It's used for:
+
+- **SSL/TLS protocols**: Enables HTTPS (secure HTTP) connections
+- **Certificate management**: Creates, signs, and manages SSL certificates
+- **Encryption**: Encrypts data in transit between client and server
+- **Key generation**: Generates public/private key pairs for secure communication
+
+In this workshop, we use OpenSSL to:
+1. Generate a private key for our SSL certificate
+2. Create a self-signed certificate for testing HTTPS locally
+3. Enable secure (encrypted) communication between browsers and nginx
+
+**Note:** For production, you'd use certificates from trusted Certificate Authorities (like Let's Encrypt) instead of self-signed certificates.
 
 ## Generate Self-Signed Certificate
 
 For production, you would use certificates from a Certificate Authority (CA) like Let's Encrypt. For demonstration purposes, we'll create a self-signed certificate.
 
-1. Create directory for certificates:
+1. Create directory for certificates in the workshop directory:
 ```bash
-mkdir -p ~/nginx-demo/ssl/certs
-cd ~/nginx-demo/ssl/certs
+cd 04-ssl-termination
+mkdir -p ssl/certs
+cd ssl/certs
 ```
 
 2. Generate private key:
@@ -74,50 +119,33 @@ chmod 644 nginx-demo.crt
 
 ## Flask Backend Setup
 
-Use the Flask application from Topic 2 (Reverse Proxy):
-
+1. Navigate to the workshop directory:
 ```bash
-mkdir -p ~/nginx-demo/ssl-demo
-cd ~/nginx-demo/ssl-demo
-
-cat > app.py << 'EOF'
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return jsonify({
-        'message': 'Hello from Flask Backend!',
-        'protocol': 'HTTPS via nginx SSL Termination',
-        'status': 'running'
-    })
-
-@app.route('/api/data')
-def get_data():
-    return jsonify({
-        'data': [1, 2, 3, 4, 5],
-        'count': 5
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-EOF
+cd 04-ssl-termination
 ```
 
-Start the Flask application:
+2. Install Python dependencies (if not already done):
+```bash
+pip3 install -r requirements.txt
+```
+
+3. Start the Flask application:
 ```bash
 python3 app.py
 ```
 
+The Flask app will run on `http://localhost:5000`. Keep this terminal open.
+
 ## nginx SSL Configuration
 
-1. Create nginx configuration:
+1. Create nginx configuration file:
 ```bash
 sudo nano /etc/nginx/sites-available/ssl-demo
 ```
 
-Add the following configuration:
+**Note:** The configuration file is located at `/etc/nginx/sites-available/ssl-demo`. This is the system nginx configuration file, not the `nginx.conf` file in the workshop directory.
+
+2. Add the following configuration to `/etc/nginx/sites-available/ssl-demo`:
 ```nginx
 # Redirect HTTP to HTTPS
 server {
@@ -134,8 +162,10 @@ server {
     server_name localhost;
 
     # SSL certificate paths
-    ssl_certificate /home/YOUR_USERNAME/nginx-demo/ssl/certs/nginx-demo.crt;
-    ssl_certificate_key /home/YOUR_USERNAME/nginx-demo/ssl/certs/nginx-demo.key;
+    # Replace /path/to/nginx-workshop with the actual path to your cloned repository
+    # Example: /home/username/nginx-workshop/04-ssl-termination/ssl/certs/nginx-demo.crt
+    ssl_certificate /path/to/nginx-workshop/04-ssl-termination/ssl/certs/nginx-demo.crt;
+    ssl_certificate_key /path/to/nginx-workshop/04-ssl-termination/ssl/certs/nginx-demo.key;
 
     # SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -167,14 +197,26 @@ server {
 }
 ```
 
-Note: Replace `YOUR_USERNAME` with your actual username.
+**Important Notes:**
+- **Configuration file location**: `/etc/nginx/sites-available/ssl-demo` (system nginx config, not the workshop `nginx.conf`)
+- Replace `/path/to/nginx-workshop` with the actual path to your cloned repository
+- Example: If your repo is at `/home/username/nginx-workshop`, the certificate path would be:
+  - `/home/username/nginx-workshop/04-ssl-termination/ssl/certs/nginx-demo.crt`
+- Make sure the `ssl/certs/` directory exists and contains the certificate files before starting nginx
 
-2. Enable the site:
+3. Update the configuration file with your actual paths:
+```bash
+sudo nano /etc/nginx/sites-available/ssl-demo
+```
+
+Replace `/path/to/nginx-workshop` with your actual repository path, then save and exit (Ctrl+X, then Y, then Enter).
+
+4. Enable the site:
 ```bash
 sudo ln -s /etc/nginx/sites-available/ssl-demo /etc/nginx/sites-enabled/
 ```
 
-3. Test and reload nginx:
+5. Test and reload nginx:
 ```bash
 sudo nginx -t
 sudo nginx -s reload

@@ -1,0 +1,27 @@
+graph TB
+    Client[Client Browser]
+    
+    subgraph "nginx Reverse Proxy"
+        Nginx[nginx Server<br/>Port 8080]
+        StaticLoc[location /<br/>Serves static files]
+        ApiLoc[location /api/<br/>Proxies to Flask]
+    end
+    
+    subgraph "Backend Services"
+        Flask[Flask Application<br/>Port 5000]
+    end
+    
+    Client -->|"1. Request: http://localhost:8080/api/data"| Nginx
+    Nginx -->|"2. Route matching"| ApiLoc
+    ApiLoc -->|"3. proxy_pass to http://127.0.0.1:5000"| Flask
+    Flask -->|"4. Process /api/data route"| Flask
+    Flask -->|"5. Return JSON response"| ApiLoc
+    ApiLoc -->|"6. Add proxy headers"| Nginx
+    Nginx -->|"7. Return to client"| Client
+    
+    style Client fill:#e1f5ff
+    style Nginx fill:#fff4e1
+    style Flask fill:#e8f5e9
+    style ApiLoc fill:#fff9c4
+    style StaticLoc fill:#fff9c4
+

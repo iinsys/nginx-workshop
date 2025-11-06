@@ -24,48 +24,92 @@ sudo apt update
 sudo apt install nginx -y
 ```
 
-### Install Python Dependencies
+### Install Python 3.x
+
+Python 3.x is usually pre-installed on most Linux distributions and macOS. Verify installation:
+
 ```bash
-pip3 install flask
+python3 --version
 ```
+
+If Python 3 is not installed:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install python3 -y
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install python3 -y
+```
+
+**macOS:**
+```bash
+brew install python3
+```
+
+**Official Documentation:**
+- [Python Downloads](https://www.python.org/downloads/)
+- [Python Installation Guide](https://wiki.python.org/moin/BeginnersGuide/Download)
+
+### Install pip Package Manager
+
+pip usually comes with Python 3.4+, but if it's not available:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install python3-pip -y
+```
+
+**CentOS/RHEL:**
+```bash
+sudo yum install python3-pip -y
+```
+
+**macOS:**
+```bash
+python3 -m ensurepip --upgrade
+```
+
+**Verify pip installation:**
+```bash
+pip3 --version
+```
+
+**Official Documentation:**
+- [pip Installation Guide](https://pip.pypa.io/en/stable/installation/)
+- [pip User Guide](https://pip.pypa.io/en/stable/user_guide/)
+
+### Install Flask
+
+Once Python 3 and pip are installed, navigate to this workshop directory and install dependencies:
+
+```bash
+cd 02-reverse-proxy
+pip3 install -r requirements.txt
+```
+
+**Verify Flask installation:**
+```bash
+python3 -c "import flask; print(flask.__version__)"
+```
+
+**Official Documentation:**
+- [Flask Installation](https://flask.palletsprojects.com/en/latest/installation/)
+- [Flask Quickstart](https://flask.palletsprojects.com/en/latest/quickstart/)
 
 ## Backend Application
 
-1. Create a directory for the backend:
+1. Navigate to the workshop directory:
 ```bash
-mkdir -p ~/nginx-demo/reverse-proxy
-cd ~/nginx-demo/reverse-proxy
+cd 02-reverse-proxy
 ```
 
-2. Create the Flask application:
+2. Install Python dependencies (if not already done):
 ```bash
-cat > app.py << 'EOF'
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return jsonify({
-        'message': 'Hello from Flask Backend!',
-        'server': 'Flask Application',
-        'status': 'running'
-    })
-
-@app.route('/api/data')
-def get_data():
-    return jsonify({
-        'data': [1, 2, 3, 4, 5],
-        'count': 5
-    })
-
-@app.route('/api/health')
-def health():
-    return jsonify({'status': 'healthy'})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-EOF
+pip3 install -r requirements.txt
 ```
 
 3. Start the Flask application:
@@ -74,6 +118,61 @@ python3 app.py
 ```
 
 The Flask app will run on `http://localhost:5000`. Keep this terminal open.
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    Client[Client Browser]
+    
+    subgraph "nginx Reverse Proxy"
+        Nginx[nginx Server<br/>Port 8080]
+        StaticLoc[location /<br/>Serves static files]
+        ApiLoc[location /api/<br/>Proxies to Flask]
+    end
+    
+    subgraph "Backend Services"
+        Flask[Flask Application<br/>Port 5000]
+    end
+    
+    Client -->|"1. Request: http://localhost:8080/api/data"| Nginx
+    Nginx -->|"2. Route matching"| ApiLoc
+    ApiLoc -->|"3. proxy_pass to http://127.0.0.1:5000"| Flask
+    Flask -->|"4. Process /api/data route"| Flask
+    Flask -->|"5. Return JSON response"| ApiLoc
+    ApiLoc -->|"6. Add proxy headers"| Nginx
+    Nginx -->|"7. Return to client"| Client
+    
+    style Client fill:#e1f5ff
+    style Nginx fill:#fff4e1
+    style Flask fill:#e8f5e9
+    style ApiLoc fill:#fff9c4
+    style StaticLoc fill:#fff9c4
+```
+
+### Request Flow
+
+1. Client sends request to `http://localhost:8080/api/data`
+2. nginx receives request on port 8080
+3. nginx matches `location /api/` and forwards to Flask at `http://127.0.0.1:5000/api/data`
+4. Flask processes request and returns JSON
+5. nginx adds proxy headers and returns response to client
+
+### Configuration Components
+
+**Server Block:**
+- `listen 8080`: nginx listens on port 8080 (public-facing port)
+- `server_name localhost`: Matches requests to `localhost` domain
+
+**Location Blocks:**
+- `location /`: Serves static files from filesystem
+- `location /api/`: Proxies requests to Flask backend
+
+**Proxy Headers:**
+- `Host`: Preserves original domain (needed for URL generation)
+- `X-Real-IP`: Client's real IP address (needed for logging/security)
+- `X-Forwarded-For`: IP chain through proxies (needed for multi-proxy setups)
+- `X-Forwarded-Proto`: Original protocol HTTP/HTTPS (needed for secure cookies/URLs)
 
 ## nginx Configuration
 
@@ -136,21 +235,24 @@ You should see the same responses, but now coming through nginx.
 
 ## Understanding the Configuration
 
+This section provides a quick reference. For detailed explanations of each directive, see the [Architecture Overview](#architecture-overview) section above.
+
+**Key Directives:**
 - `proxy_pass`: Forwards requests to the specified backend server
 - `proxy_set_header`: Sets HTTP headers that backend needs
-  - `Host`: Original host header
-  - `X-Real-IP`: Client's real IP address
-  - `X-Forwarded-For`: Chain of proxy IPs
-  - `X-Forwarded-Proto`: Original protocol (http/https)
+  - `Host`: Original host header (see [detailed explanation](#1-host-header))
+  - `X-Real-IP`: Client's real IP address (see [detailed explanation](#2-x-real-ip-header))
+  - `X-Forwarded-For`: Chain of proxy IPs (see [detailed explanation](#3-x-forwarded-for-header))
+  - `X-Forwarded-Proto`: Original protocol (http/https) (see [detailed explanation](#4-x-forwarded-proto-header))
 
 ## Frontend + Backend Example
 
 1. Stop the current Flask app (Ctrl+C)
 
-2. Create a simple HTML frontend:
+2. Create a simple HTML frontend in the workshop directory:
 ```bash
-mkdir -p ~/nginx-demo/reverse-proxy/static
-cat > ~/nginx-demo/reverse-proxy/static/index.html << 'EOF'
+mkdir -p 02-reverse-proxy/static
+cat > 02-reverse-proxy/static/index.html << 'EOF'
 <!DOCTYPE html>
 <html>
 <head>
@@ -195,7 +297,7 @@ cat > ~/nginx-demo/reverse-proxy/static/index.html << 'EOF'
         <h1>nginx Reverse Proxy Demo</h1>
         <p>This frontend is served by nginx, API calls are proxied to Flask backend.</p>
         
-        <button onclick="fetchAPI('/')">Get Home</button>
+        <button onclick="fetchAPI('/api/')">Get Home</button>
         <button onclick="fetchAPI('/api/data')">Get Data</button>
         <button onclick="fetchAPI('/api/health')">Check Health</button>
         
@@ -218,15 +320,24 @@ cat > ~/nginx-demo/reverse-proxy/static/index.html << 'EOF'
 EOF
 ```
 
-3. Update nginx configuration to serve static files and proxy API:
+3. Update the nginx configuration file to serve static files and proxy API:
+
+**Update the system nginx configuration file** (the same file you created earlier):
+```bash
+sudo nano /etc/nginx/sites-available/reverse-proxy-demo
+```
+
+Replace the entire content with this configuration:
 ```nginx
 server {
     listen 8080;
     server_name localhost;
 
     # Serve static files from frontend
+    # Replace /path/to/nginx-workshop with the actual path to your cloned repository
+    # Example: /home/username/nginx-workshop/02-reverse-proxy/static
     location / {
-        root /home/YOUR_USERNAME/nginx-demo/reverse-proxy/static;
+        root /path/to/nginx-workshop/02-reverse-proxy/static;
         index index.html;
         try_files $uri $uri/ =404;
     }
@@ -242,9 +353,11 @@ server {
 }
 ```
 
+**Note:** The configuration file is located at `/etc/nginx/sites-available/reverse-proxy-demo`. This is the system nginx configuration file, not the `nginx.conf` file in the workshop directory.
+
 4. Restart Flask app:
 ```bash
-cd ~/nginx-demo/reverse-proxy
+cd 02-reverse-proxy
 python3 app.py
 ```
 

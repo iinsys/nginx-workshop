@@ -12,7 +12,8 @@ This section demonstrates how to configure nginx as a load balancer to distribut
 
 ## Prerequisites
 
-- Python 3.x and Flask installed
+- Python 3.x and pip installed (see Topic 2 for installation)
+- Flask installed
 - Basic understanding of reverse proxy (Topic 2)
 
 ## Installation
@@ -25,79 +26,32 @@ sudo apt install nginx -y
 ```
 
 ### Install Python Dependencies
+
+Navigate to the workshop directory and install dependencies:
 ```bash
-pip3 install flask
-```
-
-## Backend Application Setup
-
-1. Create directory for the load balancer demo:
-```bash
-mkdir -p ~/nginx-demo/load-balancer
-cd ~/nginx-demo/load-balancer
-```
-
-2. Create the Flask application with server identification:
-```bash
-cat > app.py << 'EOF'
-from flask import Flask, jsonify
-import sys
-import os
-
-app = Flask(__name__)
-
-# Get port from command line argument or use default
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
-SERVER_ID = os.environ.get('SERVER_ID', f'server-{PORT}')
-
-@app.route('/')
-def home():
-    return jsonify({
-        'message': 'Hello from Flask Backend!',
-        'server_id': SERVER_ID,
-        'port': PORT,
-        'status': 'running'
-    })
-
-@app.route('/api/data')
-def get_data():
-    return jsonify({
-        'data': [1, 2, 3, 4, 5],
-        'count': 5,
-        'server': SERVER_ID
-    })
-
-@app.route('/api/health')
-def health():
-    return jsonify({
-        'status': 'healthy',
-        'server': SERVER_ID
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=True)
-EOF
+cd 03-load-balancer
+pip3 install -r requirements.txt
 ```
 
 ## Running Multiple Backend Instances
 
-Open three separate terminal windows and run:
+Open three separate terminal windows and run (you should already be in the `03-load-balancer` directory):
 
 **Terminal 1:**
 ```bash
-cd ~/nginx-demo/load-balancer
+cd 03-load-balancer
 SERVER_ID=server-1 python3 app.py 5001
 ```
 
 **Terminal 2:**
 ```bash
-cd ~/nginx-demo/load-balancer
+cd 03-load-balancer
 SERVER_ID=server-2 python3 app.py 5002
 ```
 
 **Terminal 3:**
 ```bash
-cd ~/nginx-demo/load-balancer
+cd 03-load-balancer
 SERVER_ID=server-3 python3 app.py 5003
 ```
 
@@ -129,22 +83,30 @@ server {
     listen 8080;
     server_name localhost;
 
+    # Serve static files from frontend
+    # Replace /path/to/nginx-workshop with the actual path to your cloned repository
     location / {
+        root /path/to/nginx-workshop/03-load-balancer/static;
+        index index.html;
+        try_files $uri $uri/ =404;
+    }
+
+    # Proxy API requests to load balanced backends
+    location /api/ {
         proxy_pass http://backend_servers;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-
-    location /api/ {
-        proxy_pass http://backend_servers;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
 }
 ```
+
+**Configuration Explanation:**
+- `location /`: Serves static files (frontend HTML) from the `static` directory
+- `location /api/`: Proxies API requests to the load-balanced backend servers
+- The `root` directive points to your static files directory
+- Replace `/path/to/nginx-workshop` with your actual repository path
 
 2. Enable the site:
 ```bash
@@ -159,17 +121,85 @@ sudo nginx -s reload
 
 ## Testing Load Balancing
 
-Test the load balancer:
+### Method 1: Command Line (Recommended)
+
+Test the load balancer and see which server responds (use `/api/` endpoint):
 ```bash
-# Make multiple requests and observe different server responses
+# Make multiple requests and see server_id in response
 for i in {1..10}; do
-    echo "Request $i:"
-    curl -s http://localhost:8080 | grep server_id
-    sleep 0.5
+    echo -n "Request $i: "
+    curl -s http://localhost:8080/api/ | python3 -m json.tool | grep server_id
+    sleep 0.3
 done
 ```
 
-You should see requests being distributed across server-1, server-2, and server-3.
+**Expected output:**
+```
+Request 1:     "server_id": "server-1",
+Request 2:     "server_id": "server-2",
+Request 3:     "server_id": "server-3",
+Request 4:     "server_id": "server-1",
+...
+```
+
+**Note:** Use `/api/` endpoint for API requests. The root `/` serves static files (frontend).
+
+### Method 2: Simple curl with jq (if installed)
+
+```bash
+for i in {1..10}; do
+    echo -n "Request $i: "
+    curl -s http://localhost:8080/api/ | jq -r '.server_id'
+    sleep 0.3
+done
+```
+
+### Method 3: Count Distribution
+
+Count how many requests each server handles:
+```bash
+for i in {1..30}; do
+    curl -s http://localhost:8080/api/ | python3 -m json.tool | grep server_id
+    sleep 0.1
+done | sort | uniq -c
+```
+
+**Expected output:**
+```
+     10 "server_id": "server-1",
+     10 "server_id": "server-2",
+     10 "server_id": "server-3",
+```
+
+### Method 4: Direct Backend Testing
+
+Verify each backend is running and responding:
+```bash
+echo "Testing backends directly:"
+curl -s http://localhost:5001 | python3 -m json.tool | grep server_id
+curl -s http://localhost:5002 | python3 -m json.tool | grep server_id
+curl -s http://localhost:5003 | python3 -m json.tool | grep server_id
+```
+
+**Expected output:**
+```
+    "server_id": "server-1",
+    "server_id": "server-2",
+    "server_id": "server-3",
+```
+
+### Verification Checklist
+
+✅ **Load balancing is working if:**
+- Requests show different `server_id` values (server-1, server-2, server-3)
+- Requests are distributed across all three servers
+- Each backend responds correctly when tested directly
+- nginx returns responses without errors
+
+❌ **If you see issues:**
+- All requests show the same server → Check if all backends are running
+- Connection refused → Verify nginx is running and config is correct
+- No response → Check nginx error logs: `sudo tail -f /var/log/nginx/error.log`
 
 ## Load Balancing Methods
 
@@ -247,107 +277,28 @@ curl http://localhost:8080
 
 ## Frontend Demo
 
-Create a simple HTML page to visualize load balancing:
+An interactive HTML page is included in `static/index.html` to visualize load balancing in real-time.
 
-```bash
-mkdir -p ~/nginx-demo/load-balancer/static
-cat > ~/nginx-demo/load-balancer/static/index.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>nginx Load Balancer Demo</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1000px;
-            margin: 50px auto;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        button {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px 5px;
-        }
-        button:hover {
-            background-color: #218838;
-        }
-        #requests {
-            margin-top: 20px;
-        }
-        .request-item {
-            padding: 10px;
-            margin: 5px 0;
-            background-color: #f8f9fa;
-            border-left: 4px solid #007bff;
-            border-radius: 4px;
-        }
-        .server-1 { border-left-color: #dc3545; }
-        .server-2 { border-left-color: #28a745; }
-        .server-3 { border-left-color: #ffc107; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>nginx Load Balancer Demo</h1>
-        <p>Click the button multiple times to see requests distributed across backend servers.</p>
-        
-        <button onclick="makeRequest()">Send Request</button>
-        <button onclick="makeMultipleRequests(10)">Send 10 Requests</button>
-        <button onclick="clearRequests()">Clear</button>
-        
-        <div id="requests"></div>
-    </div>
+The frontend features:
+- **Real-time statistics**: Live counters showing request distribution across all 3 servers
+- **Visual request tracking**: Color-coded requests with timestamps
+- **Interactive controls**: Send single requests, batches, or continuous auto-requests
+- **Live updates**: Watch requests distribute in real-time as you interact
 
-    <script>
-        let requestCount = 0;
-        
-        async function makeRequest() {
-            requestCount++;
-            try {
-                const response = await fetch('/');
-                const data = await response.json();
-                const serverClass = data.server_id;
-                const requestDiv = document.createElement('div');
-                requestDiv.className = `request-item ${serverClass}`;
-                requestDiv.innerHTML = `
-                    <strong>Request #${requestCount}</strong> → 
-                    ${data.server_id} (Port: ${data.port})
-                `;
-                document.getElementById('requests').prepend(requestDiv);
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-        
-        async function makeMultipleRequests(count) {
-            for (let i = 0; i < count; i++) {
-                await makeRequest();
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
-        }
-        
-        function clearRequests() {
-            document.getElementById('requests').innerHTML = '';
-            requestCount = 0;
-        }
-    </script>
-</body>
-</html>
-EOF
-```
+To use the frontend:
+1. The `static/index.html` file is already in the repository
+2. Configure nginx to serve static files (see configuration below)
+3. Open `http://localhost:8080` in your browser
+4. Click buttons to send requests and watch load balancing in action!
 
 Update nginx config to serve static files:
+
+**Update the system nginx configuration file:**
+```bash
+sudo nano /etc/nginx/sites-available/load-balancer-demo
+```
+
+Replace the content with:
 ```nginx
 upstream backend_servers {
     server 127.0.0.1:5001;
@@ -359,12 +310,15 @@ server {
     listen 8080;
     server_name localhost;
 
+    # Serve static files
+    # Replace /path/to/nginx-workshop with the actual path to your cloned repository
     location / {
-        root /home/YOUR_USERNAME/nginx-demo/load-balancer/static;
+        root /path/to/nginx-workshop/03-load-balancer/static;
         index index.html;
         try_files $uri $uri/ =404;
     }
 
+    # Proxy API requests to load balanced backends
     location /api/ {
         proxy_pass http://backend_servers;
         proxy_set_header Host $host;
@@ -373,6 +327,8 @@ server {
     }
 }
 ```
+
+**Note:** The configuration file is located at `/etc/nginx/sites-available/load-balancer-demo`.
 
 ## Benefits of Load Balancing
 

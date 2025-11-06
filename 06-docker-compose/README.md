@@ -19,26 +19,82 @@ This section demonstrates how to deploy complete nginx setups using Docker Compo
 ## Installation
 
 ### Install Docker
+
+**Ubuntu/Debian:**
 ```bash
-# Ubuntu/Debian
+# Update package index
+sudo apt update
+
+# Install Docker
+sudo apt install docker.io -y
+
+# Start and enable Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add your user to docker group (to run without sudo)
+sudo usermod -aG docker $USER
+
+# Log out and log back in for group changes to take effect
+```
+
+**Alternative method (official script):**
+```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 ```
 
-### Install Docker Compose
+**CentOS/RHEL:**
 ```bash
-# Docker Compose is included with Docker Desktop
-# For Linux, install separately:
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+sudo yum install docker -y
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
 ```
 
-Verify installation:
+**macOS:**
+```bash
+# Install Docker Desktop from: https://www.docker.com/products/docker-desktop
+# Or use Homebrew:
+brew install --cask docker
+```
+
+### Install Docker Compose
+
+**Docker Compose v2** is the recommended version and is included with newer Docker installations as a plugin.
+
+**Ubuntu/Debian:**
+```bash
+# Install Docker Compose v2 plugin
+sudo apt update
+sudo apt install docker-compose-plugin -y
+```
+
+**CentOS/RHEL:**
+```bash
+# Install Docker Compose v2 plugin
+sudo yum install docker-compose-plugin -y
+```
+
+**macOS:**
+Docker Compose is included with Docker Desktop.
+
+**Verify installation:**
 ```bash
 docker --version
-docker-compose --version
+docker compose version
 ```
+
+**Important Notes:**
+- Use `docker compose` (with space, v2) instead of `docker-compose` (with hyphen, v1)
+- The v2 plugin is the recommended version and works better with newer Docker versions
+- If you see errors with `docker-compose`, use `docker compose` instead
+- After adding user to docker group, you may need to log out and log back in
+
+**Official Documentation:**
+- [Docker Installation Guide](https://docs.docker.com/engine/install/)
+- [Docker Compose Installation](https://docs.docker.com/compose/install/)
 
 ## Project Structure
 
@@ -63,416 +119,119 @@ docker-compose --version
 
 ## Complete Example: Load Balancer + SSL + Caching
 
-This example combines:
+This example combines all concepts from previous topics:
 - Multiple Flask backend instances (load balancing)
 - nginx as reverse proxy and load balancer
 - SSL termination
 - Caching
 - Static file serving
 
-### Step 1: Create Backend Application
+All files are already in the repository. The project structure is:
 
-Create `backend/app.py`:
-```python
-from flask import Flask, jsonify
-import os
-import socket
-
-app = Flask(__name__)
-HOSTNAME = socket.gethostname()
-PORT = int(os.environ.get('PORT', 5000))
-
-@app.route('/')
-def home():
-    return jsonify({
-        'message': 'Hello from Flask Backend!',
-        'hostname': HOSTNAME,
-        'port': PORT,
-        'status': 'running'
-    })
-
-@app.route('/api/data')
-def get_data():
-    return jsonify({
-        'data': [1, 2, 3, 4, 5],
-        'count': 5,
-        'server': HOSTNAME
-    })
-
-@app.route('/api/health')
-def health():
-    return jsonify({
-        'status': 'healthy',
-        'server': HOSTNAME
-    })
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=True)
+```
+06-docker-compose/
+├── docker-compose.yml
+├── backend/
+│   ├── app.py
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/
+│   ├── Dockerfile
+│   └── static/
+│       └── index.html
+└── nginx/
+    ├── nginx.conf
+    └── ssl/          (SSL certificates will be generated here)
 ```
 
-Create `backend/requirements.txt`:
-```
-Flask==3.0.0
-```
+### Step 1: Generate SSL Certificates (Required)
 
-Create `backend/Dockerfile`:
-```dockerfile
-FROM python:3.11-slim
+**Important:** You must generate SSL certificates before running Docker Compose, otherwise nginx will fail to start.
 
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app.py .
-
-EXPOSE 5000
-
-CMD ["python", "app.py"]
-```
-
-### Step 2: Create Frontend
-
-Create `frontend/static/index.html`:
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>nginx Docker Compose Demo</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1000px;
-            margin: 50px auto;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px 5px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            white-space: pre-wrap;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>nginx Docker Compose Demo</h1>
-        <p>This frontend is served by nginx. API calls are load balanced across multiple Flask backends.</p>
-        
-        <button onclick="fetchAPI('/api/data')">Get Data</button>
-        <button onclick="fetchAPI('/api/health')">Check Health</button>
-        
-        <div id="result"></div>
-    </div>
-
-    <script>
-        async function fetchAPI(endpoint) {
-            try {
-                const response = await fetch(endpoint);
-                const data = await response.json();
-                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
-            } catch (error) {
-                document.getElementById('result').textContent = 'Error: ' + error.message;
-            }
-        }
-    </script>
-</body>
-</html>
-```
-
-Create `frontend/Dockerfile`:
-```dockerfile
-FROM nginx:alpine
-
-COPY static/ /usr/share/nginx/html/
-
-EXPOSE 80
-```
-
-### Step 3: Create nginx Configuration
-
-Create `nginx/nginx.conf`:
-```nginx
-# Cache zone
-proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=100m 
-                 inactive=60m use_temp_path=off;
-
-# Upstream backend servers
-upstream backend_servers {
-    server backend1:5000;
-    server backend2:5000;
-    server backend3:5000;
-}
-
-# HTTP server - redirect to HTTPS
-server {
-    listen 80;
-    server_name localhost;
-    
-    return 301 https://$server_name$request_uri;
-}
-
-# HTTPS server
-server {
-    listen 443 ssl http2;
-    server_name localhost;
-
-    # SSL certificates
-    ssl_certificate /etc/nginx/ssl/nginx-demo.crt;
-    ssl_certificate_key /etc/nginx/ssl/nginx-demo.key;
-
-    # SSL configuration
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    # Serve static files from frontend
-    location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ =404;
-    }
-
-    # Proxy API requests with caching
-    location /api/ {
-        proxy_pass http://backend_servers;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Enable caching
-        proxy_cache my_cache;
-        proxy_cache_valid 200 5m;
-        proxy_cache_key "$scheme$request_method$host$request_uri";
-        add_header X-Cache-Status $upstream_cache_status;
-    }
-}
-```
-
-### Step 4: Generate SSL Certificates
-
+Navigate to the workshop directory and generate SSL certificates:
 ```bash
-cd docs/06-docker-compose
+cd 06-docker-compose
 mkdir -p nginx/ssl
 cd nginx/ssl
 
+# Generate private key
 openssl genrsa -out nginx-demo.key 2048
+
+# Generate certificate (use defaults or press Enter for all prompts)
 openssl req -new -key nginx-demo.key -out nginx-demo.csr -subj "/CN=localhost"
+
+# Generate self-signed certificate
 openssl x509 -req -days 365 -in nginx-demo.csr -signkey nginx-demo.key -out nginx-demo.crt
 
+# Clean up and set permissions
 rm nginx-demo.csr
 chmod 600 nginx-demo.key
 chmod 644 nginx-demo.crt
 ```
 
-### Step 5: Create Docker Compose File
+### Step 2: Review Configuration Files
 
-Create `docker-compose.yml`:
-```yaml
-version: '3.8'
+All configuration files are already in the repository:
 
-services:
-  # Backend services (3 instances for load balancing)
-  backend1:
-    build: ./backend
-    container_name: flask-backend-1
-    environment:
-      - PORT=5000
-    networks:
-      - nginx-network
+- **`docker-compose.yml`**: Defines all services (3 backends, frontend, nginx)
+- **`backend/Dockerfile`**: Builds Flask application container
+- **`frontend/Dockerfile`**: Builds static file server
+- **`nginx/nginx.conf`**: nginx configuration with load balancing, SSL, and caching
 
-  backend2:
-    build: ./backend
-    container_name: flask-backend-2
-    environment:
-      - PORT=5000
-    networks:
-      - nginx-network
-
-  backend3:
-    build: ./backend
-    container_name: flask-backend-3
-    environment:
-      - PORT=5000
-    networks:
-      - nginx-network
-
-  # Frontend service
-  frontend:
-    build: ./frontend
-    container_name: nginx-frontend
-    volumes:
-      - ./frontend/static:/usr/share/nginx/html:ro
-    networks:
-      - nginx-network
-
-  # nginx reverse proxy and load balancer
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-proxy
-    ports:
-      - "8080:80"
-      - "8443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./frontend/static:/usr/share/nginx/html:ro
-      - nginx-cache:/var/cache/nginx
-    depends_on:
-      - backend1
-      - backend2
-      - backend3
-      - frontend
-    networks:
-      - nginx-network
-    command: >
-      sh -c "nginx -g 'daemon off;'"
-
-volumes:
-  nginx-cache:
-
-networks:
-  nginx-network:
-    driver: bridge
-```
-
-Note: The nginx.conf above uses `include /etc/nginx/nginx.conf` syntax. For a complete config, create `nginx/nginx.conf` as:
-
-```nginx
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    # Cache zone
-    proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=100m 
-                     inactive=60m use_temp_path=off;
-
-    # Upstream backend servers
-    upstream backend_servers {
-        server backend1:5000;
-        server backend2:5000;
-        server backend3:5000;
-    }
-
-    # HTTP server - redirect to HTTPS
-    server {
-        listen 80;
-        server_name localhost;
-        
-        return 301 https://$server_name$request_uri;
-    }
-
-    # HTTPS server
-    server {
-        listen 443 ssl http2;
-        server_name localhost;
-
-        # SSL certificates
-        ssl_certificate /etc/nginx/ssl/nginx-demo.crt;
-        ssl_certificate_key /etc/nginx/ssl/nginx-demo.key;
-
-        # SSL configuration
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers HIGH:!aNULL:!MD5;
-        ssl_prefer_server_ciphers on;
-
-        # Security headers
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header X-Content-Type-Options "nosniff" always;
-
-        # Serve static files from frontend
-        location / {
-            root /usr/share/nginx/html;
-            index index.html;
-            try_files $uri $uri/ =404;
-        }
-
-        # Proxy API requests with caching
-        location /api/ {
-            proxy_pass http://backend_servers;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            
-            # Enable caching
-            proxy_cache my_cache;
-            proxy_cache_valid 200 5m;
-            proxy_cache_key "$scheme$request_method$host$request_uri";
-            add_header X-Cache-Status $upstream_cache_status;
-        }
-    }
-}
-```
+You can review these files to understand the setup. The `nginx/nginx.conf` includes:
+- Cache zone configuration
+- Upstream backend servers (3 instances)
+- HTTP to HTTPS redirect
+- SSL termination
+- Load balancing
+- Caching for API endpoints
 
 ## Running the Application
 
-1. Navigate to the project directory:
+### Access Ports
+
+After starting the application, you can access it using:
+
+- **HTTP (Port 8087)**: `http://localhost:8087` - Will automatically redirect to HTTPS
+- **HTTPS (Port 8443)**: `https://localhost:8443` - Main access point (use this in your browser)
+
+**Note:** You'll need to accept the security warning for the self-signed certificate when accessing via HTTPS.
+
+1. Navigate to the workshop directory:
 ```bash
-cd docs/06-docker-compose
+cd 06-docker-compose
 ```
 
 2. Build and start all services:
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Or run in detached mode:
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 3. Check running containers:
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 4. View logs:
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f nginx
-docker-compose logs -f backend1
+docker compose logs -f nginx
+docker compose logs -f backend1
 ```
 
 ## Testing
 
-1. Test HTTP redirect:
+1. Test HTTP redirect (will redirect to HTTPS):
 ```bash
-curl -L http://localhost:8080
+curl -L http://localhost:8087
 ```
 
 2. Test HTTPS endpoint:
@@ -500,6 +259,10 @@ curl -k -v https://localhost:8443/api/data | grep X-Cache-Status
 
 5. Open in browser:
 ```
+# HTTP (will redirect to HTTPS)
+http://localhost:8087
+
+# HTTPS (main access point)
 https://localhost:8443
 ```
 (Accept the security warning for self-signed certificate)
@@ -508,28 +271,28 @@ https://localhost:8443
 
 ### Stop services:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Stop and remove volumes:
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Restart a specific service:
 ```bash
-docker-compose restart nginx
+docker compose restart nginx
 ```
 
 ### Scale backend instances:
 ```bash
-docker-compose up -d --scale backend1=2 --scale backend2=2 --scale backend3=2
+docker compose up -d --scale backend1=2 --scale backend2=2 --scale backend3=2
 ```
 
 ### Execute commands in containers:
 ```bash
-docker-compose exec nginx nginx -t
-docker-compose exec backend1 python -c "import flask; print(flask.__version__)"
+docker compose exec nginx nginx -t
+docker compose exec backend1 python -c "import flask; print(flask.__version__)"
 ```
 
 ## Simplified Example (HTTP Only)
@@ -558,7 +321,7 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "8080:80"
+      - "8087:80"
     volumes:
       - ./nginx/nginx-simple.conf:/etc/nginx/nginx.conf:ro
       - ./frontend/static:/usr/share/nginx/html:ro
@@ -578,17 +341,87 @@ services:
 - Volume management
 - Development and production parity
 
+## Troubleshooting
+
+### Port Already in Use
+
+If you get an error like `address already in use` for port 8087 or 8443:
+
+**Option 1: Stop conflicting nginx services**
+```bash
+# Check what's using the port
+sudo lsof -i :8087
+sudo lsof -i :8443
+
+# Stop system nginx (if running from previous workshop sections)
+sudo systemctl stop nginx
+# Or disable specific sites:
+sudo rm /etc/nginx/sites-enabled/ssl-demo
+sudo rm /etc/nginx/sites-enabled/caching-demo
+sudo systemctl reload nginx
+```
+
+**Option 2: Change ports in docker-compose.yml**
+```yaml
+ports:
+  - "8090:80"    # Change 8087 to 8090
+  - "8444:443"   # Change 8443 to 8444
+```
+
+Then update your test commands to use the new ports.
+
+**Option 3: Use different ports for Docker Compose**
+If you're running multiple workshop sections simultaneously, use different ports:
+- Section 02-05: Use port 8080
+- Section 06 (Docker Compose): Use port 8087 (HTTP) and 8443 (HTTPS)
+
+### Container Won't Start
+
+1. Check logs:
+```bash
+docker compose logs nginx
+docker compose logs backend1
+```
+
+2. Verify SSL certificates exist:
+```bash
+ls -la nginx/ssl/
+# Should show nginx-demo.crt and nginx-demo.key
+```
+
+3. Test nginx configuration:
+```bash
+docker compose exec nginx nginx -t
+```
+
+### Backend Services Not Responding
+
+1. Check if backends are running:
+```bash
+docker compose ps
+```
+
+2. Test backend directly:
+```bash
+docker compose exec backend1 curl http://localhost:5000/api/data
+```
+
+3. Check network connectivity:
+```bash
+docker compose exec nginx ping backend1
+```
+
 ## Cleanup
 
 ```bash
 # Stop and remove containers, networks
-docker-compose down
+docker compose down
 
 # Remove volumes as well
-docker-compose down -v
+docker compose down -v
 
 # Remove images
-docker-compose down --rmi all
+docker compose down --rmi all
 ```
 
 ## Next Steps

@@ -10,6 +10,14 @@ def home():
         'status': 'running'
     })
 
+@app.route('/api/')
+def api_home():
+    return jsonify({
+        'message': 'Hello from Flask Backend!',
+        'server': 'Flask Application',
+        'status': 'running'
+    })
+
 @app.route('/api/data')
 def get_data():
     return jsonify({
