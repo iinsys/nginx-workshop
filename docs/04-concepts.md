@@ -17,7 +17,35 @@ A reverse proxy sits between clients and backend servers, forwarding client requ
 
 ### How It Works
 
-![Reverse Proxy Flow](./concepts-reverse-proxy.mmd)
+```mermaid
+graph LR
+    classDef client fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+    classDef proxy fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef process fill:#F8F1E3,stroke:#C29B27,color:#1A1A1A;
+    classDef backend fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+
+    Client[Client Browser]:::client
+    
+    subgraph "nginx Reverse Proxy"
+        Nginx[nginx Server]:::proxy
+        Process[Process Request<br/>Add Headers<br/>Modify if needed]:::process
+    end
+    
+    subgraph "Backend Servers"
+        Backend1[Backend Server 1]:::backend
+        Backend2[Backend Server 2]:::backend
+    end
+    
+    Client -->|1. Request| Nginx
+    Nginx -->|2. Process| Process
+    Process -->|3. Forward| Backend1
+    Process -->|3. Forward| Backend2
+    Backend1 -->|4. Response| Process
+    Backend2 -->|4. Response| Process
+    Process -->|5. Add Headers| Nginx
+    Nginx -->|6. Response| Client
+```
+
 
 nginx receives request, forwards to backend, receives response, sends to client.
 
@@ -33,7 +61,43 @@ Distributing incoming requests across multiple backend servers to:
 
 ### Load Balancing Methods
 
-![Load Balancing Methods](./concepts-load-balancing.mmd)
+```mermaid
+graph TB
+    classDef client fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+    classDef balancer fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef backend fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+
+    Client1[Client 1]:::client
+    Client2[Client 2]:::client
+    Client3[Client 3]:::client
+    ClientN[Client N]:::client
+    
+    Nginx[nginx Load Balancer]:::balancer
+    
+    subgraph "Backend Servers"
+        Server1[Server 1<br/>Weight: 3]:::backend
+        Server2[Server 2<br/>Weight: 2]:::backend
+        Server3[Server 3<br/>Weight: 1]:::backend
+    end
+    
+    Client1 -->|Request 1| Nginx
+    Client2 -->|Request 2| Nginx
+    Client3 -->|Request 3| Nginx
+    ClientN -->|Request N| Nginx
+    
+    Nginx -->|Round Robin| Server1
+    Nginx -->|Round Robin| Server2
+    Nginx -->|Round Robin| Server3
+    
+    Nginx -->|Least Connections| Server1
+    Nginx -->|Least Connections| Server2
+    Nginx -->|Least Connections| Server3
+    
+    Nginx -->|IP Hash| Server1
+    Nginx -->|IP Hash| Server2
+    Nginx -->|IP Hash| Server3
+```
+
 
 #### 1. Round Robin (Default)
 Requests distributed evenly in order:
@@ -74,7 +138,35 @@ Processing SSL/TLS encryption/decryption at the proxy instead of backend servers
 
 ### How It Works
 
-![SSL Termination Flow](./concepts-ssl-termination.mmd)
+```mermaid
+graph LR
+    classDef client fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+    classDef proxy fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef process fill:#F8F1E3,stroke:#C29B27,color:#1A1A1A;
+    classDef backend fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+
+    Client[Client Browser<br/>HTTPS Request]:::client
+    
+    subgraph "nginx SSL Termination"
+        Nginx[nginx Server<br/>Port 443]:::proxy
+        SSL[SSL/TLS Processing<br/>Decrypt/Encrypt]:::process
+    end
+    
+    subgraph "Backend Servers"
+        Backend1[Backend Server 1<br/>HTTP only]:::backend
+        Backend2[Backend Server 2<br/>HTTP only]:::backend
+    end
+    
+    Client -->|1. HTTPS Encrypted| Nginx
+    Nginx -->|2. Decrypt| SSL
+    SSL -->|3. HTTP Plain| Backend1
+    SSL -->|3. HTTP Plain| Backend2
+    Backend1 -->|4. HTTP Response| SSL
+    Backend2 -->|4. HTTP Response| SSL
+    SSL -->|5. Encrypt| Nginx
+    Nginx -->|6. HTTPS Encrypted| Client
+```
+
 
 ### Benefits
 
@@ -104,7 +196,39 @@ Storing responses temporarily to serve future identical requests faster without 
 
 ### How nginx Caching Works
 
-![Caching Flow](./concepts-caching.mmd)
+```mermaid
+graph TB
+    classDef client fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+    classDef proxy fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef cache fill:#F8F1E3,stroke:#C29B27,color:#1A1A1A;
+    classDef backend fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+
+    Client1[Client 1<br/>Request 1]:::client
+    Client2[Client 2<br/>Request 2<br/>Same URL]:::client
+    
+    Nginx[nginx Server]:::proxy
+    
+    subgraph "Cache Zone"
+        Cache[Cache Storage<br/>Memory + Disk]:::cache
+        Check{Cache Hit?}:::cache
+    end
+    
+    Backend[Backend Server]:::backend
+    
+    Client1 -->|1. Request| Nginx
+    Nginx -->|2. Check Cache| Check
+    Check -->|MISS| Backend
+    Backend -->|3. Response| Nginx
+    Nginx -->|4. Store in Cache| Cache
+    Nginx -->|5. Response| Client1
+    
+    Client2 -->|1. Request| Nginx
+    Nginx -->|2. Check Cache| Check
+    Check -->|HIT| Cache
+    Cache -->|3. Serve from Cache| Nginx
+    Nginx -->|4. Response<br/>Fast!| Client2
+```
+
 
 - Request 1: Client → nginx → Backend → Response (stored in cache)
 - Request 2: Client → nginx → Cache (served directly, no backend call)
@@ -135,7 +259,32 @@ Determine what makes responses unique:
 
 ### What is Static File Serving?
 
-![Static File Serving](./concepts-static-serving.mmd)
+```mermaid
+graph LR
+    classDef client fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+    classDef server fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef storage fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+
+    Client1[Client 1]:::client
+    Client2[Client 2]:::client
+    ClientN[Client N]:::client
+    
+    subgraph "nginx Web Server"
+        Nginx[nginx Server]:::server
+        FileSystem[File System<br/>/var/www/html]:::storage
+    end
+    
+    Client1 -->|Request: /index.html| Nginx
+    Client2 -->|Request: /style.css| Nginx
+    ClientN -->|Request: /image.jpg| Nginx
+    
+    Nginx -->|Read File| FileSystem
+    FileSystem -->|Return File| Nginx
+    Nginx -->|Response| Client1
+    Nginx -->|Response| Client2
+    Nginx -->|Response| ClientN
+```
+
 
 Directly serving files (HTML, CSS, JS, images) without processing.
 

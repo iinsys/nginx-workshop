@@ -4,7 +4,36 @@
 
 nginx uses a master-worker process architecture:
 
-![Master-Worker Process Model](./architecture-master-worker.mmd)
+```mermaid
+graph TB
+    classDef control fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef worker fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+    classDef client fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+
+    Master[Master Process<br/>- Reads configuration<br/>- Manages workers<br/>- Handles signals]
+    
+    Worker1[Worker Process 1<br/>Handles connections]
+    Worker2[Worker Process 2<br/>Handles connections]
+    Worker3[Worker Process 3<br/>Handles connections]
+    WorkerN[Worker Process N<br/>Handles connections]
+    
+    Master --> Worker1
+    Master --> Worker2
+    Master --> Worker3
+    Master --> WorkerN
+    
+    Client1[Client 1] --> Worker1
+    Client2[Client 2] --> Worker1
+    Client3[Client 3] --> Worker2
+    Client4[Client 4] --> Worker2
+    Client5[Client 5] --> Worker3
+    ClientN[Client N] --> WorkerN
+
+    class Master control;
+    class Worker1,Worker2,Worker3,WorkerN worker;
+    class Client1,Client2,Client3,Client4,Client5,ClientN client;
+```
+
 
 ### Master Process
 
@@ -45,7 +74,31 @@ Problems:
 
 ### nginx Event Model
 
-![Event-Driven Architecture](./architecture-event-driven.mmd)
+```mermaid
+graph LR
+    classDef legacy fill:#F5E8E7,stroke:#C75C5C,color:#1A1A1A;
+    classDef modern fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+
+    subgraph "Traditional Model (Apache-like)"
+        Conn1[Connection 1]:::legacy --> Proc1[Process/Thread 1]:::legacy
+        Conn2[Connection 2]:::legacy --> Proc2[Process/Thread 2]:::legacy
+        Conn3[Connection 3]:::legacy --> Proc3[Process/Thread 3]:::legacy
+        ConnN[Connection N]:::legacy --> ProcN[Process/Thread N]:::legacy
+    end
+    
+    subgraph "nginx Event Model"
+        Worker[Worker Process]:::modern
+        EventLoop[Event Loop]:::modern
+        
+        ConnA[Connection 1<br/>non-blocking]:::modern --> EventLoop
+        ConnB[Connection 2<br/>non-blocking]:::modern --> EventLoop
+        ConnC[Connection 3<br/>non-blocking]:::modern --> EventLoop
+        ConnD[Connection ...<br/>thousands]:::modern --> EventLoop
+        
+        EventLoop --> Worker
+    end
+```
+
 
 Benefits:
 - Single worker handles many connections
@@ -57,7 +110,34 @@ Benefits:
 
 ### Request Lifecycle
 
-![Request Processing Flow](./architecture-request-flow.mmd)
+```mermaid
+graph TB
+    classDef actor fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+    classDef engine fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef phase fill:#F8F1E3,stroke:#C29B27,color:#1A1A1A;
+    classDef outcome fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+
+    Client[Client Browser]:::actor -->|1. HTTP Request| Nginx[nginx Worker Process]:::engine
+    
+    Nginx -->|2. Read Headers| Phase1[POST_READ Phase]:::phase
+    Phase1 -->|3. Server Rewrite| Phase2[SERVER_REWRITE Phase]:::phase
+    Phase2 -->|4. Find Location| Phase3[FIND_CONFIG Phase]:::phase
+    Phase3 -->|5. Location Rewrite| Phase4[REWRITE Phase]:::phase
+    Phase4 -->|6. Access Control| Phase5[ACCESS Phase]:::phase
+    Phase5 -->|7. Generate Content| Phase6[CONTENT Phase]:::phase
+    
+    Phase6 -->|8a. Serve Static File| Static[Static File Server]:::outcome
+    Phase6 -->|8b. Proxy to Backend| Proxy[Backend Server]:::outcome
+    Phase6 -->|8c. Load Balance| Upstream[Upstream Servers]:::outcome
+    
+    Static -->|9. Response| Nginx
+    Proxy -->|9. Response| Nginx
+    Upstream -->|9. Response| Nginx
+    
+    Nginx -->|10. Log Request| Phase7[LOG Phase]:::phase
+    Phase7 -->|11. Send Response| Client:::actor
+```
+
 
 The request goes through these steps:
 1. **Client connects** to nginx
@@ -91,7 +171,38 @@ nginx processes requests in phases:
 
 nginx configuration is organized in hierarchical contexts:
 
-![Configuration Context Hierarchy](./architecture-config-contexts.mmd)
+```mermaid
+graph TD
+    classDef root fill:#E8F1FC,stroke:#2F6CC0,color:#1A1A1A;
+    classDef mid fill:#F4EFFF,stroke:#8256D8,color:#1A1A1A;
+    classDef leaf fill:#EAF7F1,stroke:#4A9E6F,color:#1A1A1A;
+
+    Main[Main Context<br/>Top-level configuration]:::root
+    
+    Events[Events Context<br/>Event model config]:::mid
+    HTTP[HTTP Context<br/>HTTP server config]:::mid
+    
+    Upstream[Upstream Context<br/>Backend server groups]:::mid
+    
+    Server1[Server Block 1<br/>Virtual host 1]:::mid
+    Server2[Server Block 2<br/>Virtual host 2]:::mid
+    
+    Loc1[Location /<br/>URL matching]:::leaf
+    Loc2[Location /api/<br/>URL matching]:::leaf
+    Loc3[Location /static/<br/>URL matching]:::leaf
+    
+    Main --> Events
+    Main --> HTTP
+    
+    HTTP --> Upstream
+    HTTP --> Server1
+    HTTP --> Server2
+    
+    Server1 --> Loc1
+    Server1 --> Loc2
+    Server2 --> Loc3
+```
+
 
 Example structure:
 ```nginx
